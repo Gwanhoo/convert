@@ -187,7 +187,7 @@ export default function HomePage() {
                 }}
                 disabled={!file || allowedOptions.length === 0}
               />
-            
+
               {file && (
                 <p className="mt-2 text-xs text-slate-500">
                   {formatLabelByMimeType[normalizeMimeType(file.type)] ?? "Input"} →{" "}
