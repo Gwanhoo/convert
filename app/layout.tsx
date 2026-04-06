@@ -13,8 +13,29 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Convertly - Precision File Conversion",
-  description: "Fast, secure browser-based file conversion"
+  metadataBase: new URL("https://convert-rust-phi.vercel.app"),
+
+  title: {
+    default: "Convertly - Free Image Converter, Compressor & Resizer",
+    template: "%s | Convertly"
+  },
+
+  description:
+    "Convert, compress and resize images online for free. JPG to PNG, WebP converter and more.",
+
+  robots: {
+    index: true,
+    follow: true
+  },
+
+  openGraph: {
+    title: "Convertly - Free Image Tools",
+    description:
+      "Convert, compress and resize images online instantly in your browser.",
+    url: "https://convert-rust-phi.vercel.app",
+    siteName: "Convertly",
+    type: "website"
+  }
 };
 
 export default function RootLayout({
@@ -22,7 +43,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="light">
-      <body className={`${inter.variable} ${manrope.variable}`}>{children}</body>
+      <body className={`${inter.variable} ${manrope.variable}`}>
+        {children}
+      </body>
     </html>
   );
 }
