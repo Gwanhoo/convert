@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { convertImageFile } from "@/lib/imageConverter";
 import { conversionDefinitions } from "@/lib/conversionTypes";
 import {
-  getOutputOptionIdsForInputMime,
   getUnsupportedFormatMessage,
   normalizeMimeType
 } from "@/lib/imageFormatSupport";
@@ -13,12 +12,19 @@ const imageDefinition = conversionDefinitions[0];
 
 const formatLabelByMimeType: Record<string, string> = {
   "image/jpeg": "JPG",
+  "image/jpg": "JPG",
   "image/png": "PNG"
+};
+
+const outputOptionsByInputMime: Record<string, string[]> = {
+  "image/jpeg": ["png", "webp"],
+  "image/jpg": ["png", "webp"],
+  "image/png": ["jpg", "webp"]
 };
 
 export default function HomePage() {
   const [file, setFile] = useState<File | null>(null);
-  const [selectedFormat, setSelectedFormat] = useState(imageDefinition.options[0].id);
+  const [selectedFormat, setSelectedFormat] = useState("webp");
   const [isConverting, setIsConverting] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -29,10 +35,11 @@ export default function HomePage() {
 
   const allowedOutputIds = useMemo(() => {
     if (!file) {
-      return imageDefinition.options.map((option) => option.id);
+      return ["png", "jpg", "webp"];
     }
 
-    return getOutputOptionIdsForInputMime(file.type, imageDefinition.options);
+    const normalizedMimeType = normalizeMimeType(file.type);
+    return outputOptionsByInputMime[normalizedMimeType] ?? [];
   }, [file]);
 
   const allowedOptions = useMemo(() => {
@@ -77,6 +84,11 @@ export default function HomePage() {
       return;
     }
 
+    if (allowedOptions.length === 0) {
+      setErrorMessage("This file type cannot be converted to a supported output format.");
+      return;
+    }
+
     setErrorMessage(null);
     setIsConverting(true);
 
@@ -101,7 +113,7 @@ export default function HomePage() {
 
     const normalizedMimeType = normalizeMimeType(nextFile.type);
 
-    if (!imageDefinition.acceptedMimeTypes.includes(normalizedMimeType)) {
+    if (!["image/jpeg", "image/jpg", "image/png"].includes(normalizedMimeType)) {
       setErrorMessage(getUnsupportedFormatMessage(nextFile.type));
       setFile(null);
       resetDownload();
@@ -139,7 +151,7 @@ export default function HomePage() {
               <input
                 className="sr-only"
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png"
                 onChange={(event) => {
                   const nextFile = event.target.files?.[0];
                   if (nextFile) {
@@ -190,8 +202,7 @@ export default function HomePage() {
 
               {file && (
                 <p className="mt-2 text-xs text-slate-500">
-                  {formatLabelByMimeType[normalizeMimeType(file.type)] ?? "Input"} →{" "}
-                  {selectedOption.label}
+                  {formatLabelByMimeType[normalizeMimeType(file.type)] ?? "Input"} → {selectedOption.label}
                 </p>
               )}
             </div>
@@ -205,7 +216,9 @@ export default function HomePage() {
               {isConverting ? "Converting..." : "Convert image"}
             </button>
 
-            {errorMessage && <p className="mt-3 text-sm font-medium text-rose-700">{errorMessage}</p>}
+            {errorMessage && (
+              <p className="mt-3 text-sm font-medium text-rose-700">{errorMessage}</p>
+            )}
           </div>
 
           <div className="rounded-2xl bg-white p-6 shadow-sm">
