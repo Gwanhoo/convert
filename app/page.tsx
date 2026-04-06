@@ -9,6 +9,11 @@ import {
   normalizeMimeType
 } from "@/lib/imageFormatSupport";
 import { FormatSelector } from "@/components/FormatSelector";
+export const metadata = {
+  title: "Image Converter - JPG to PNG, WebP Online",
+  description: "Convert JPG and PNG images to WebP, PNG, or JPG instantly in your browser."
+};
+
 
 const imageDefinition = conversionDefinitions[0];
 
