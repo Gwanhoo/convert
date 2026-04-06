@@ -29,6 +29,12 @@ export const conversionDefinitions: ConversionDefinition[] = [
         outputExtension: "png"
       },
       {
+        id: "jpg",
+        label: "JPG",
+        outputMimeType: "image/jpeg",
+        outputExtension: "jpg"
+      },
+      {
         id: "webp",
         label: "WebP",
         outputMimeType: "image/webp",
