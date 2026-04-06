@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { convertImageFile } from "@/lib/imageConverter";
 import { conversionDefinitions } from "@/lib/conversionTypes";
+import {
+  getOutputOptionIdsForInputMime,
+  getUnsupportedFormatMessage,
+  normalizeMimeType
+} from "@/lib/imageFormatSupport";
 
 const imageDefinition = conversionDefinitions[0];
-
-const outputOptionsByInput: Record<string, string[]> = {
-  "image/jpeg": ["png", "webp"],
-  "image/png": ["jpg", "webp"]
-};
 
 const formatLabelByMimeType: Record<string, string> = {
   "image/jpeg": "JPG",
@@ -23,23 +23,28 @@ export default function HomePage() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  const previewUrl = useMemo(() => {
+    return file ? URL.createObjectURL(file) : null;
+  }, [file]);
 
   const allowedOutputIds = useMemo(() => {
     if (!file) {
       return imageDefinition.options.map((option) => option.id);
     }
 
-    return outputOptionsByInput[file.type] ?? [];
+    return getOutputOptionIdsForInputMime(file.type, imageDefinition.options);
   }, [file]);
 
-  const allowedOptions = useMemo(
-    () => imageDefinition.options.filter((option) => allowedOutputIds.includes(option.id)),
-    [allowedOutputIds]
-  );
+  const allowedOptions = useMemo(() => {
+    return imageDefinition.options.filter((option) => allowedOutputIds.includes(option.id));
+  }, [allowedOutputIds]);
 
   const selectedOption = useMemo(() => {
-    return allowedOptions.find((option) => option.id === selectedFormat) ?? allowedOptions[0] ?? imageDefinition.options[0];
+    return (
+      allowedOptions.find((option) => option.id === selectedFormat) ??
+      allowedOptions[0] ??
+      imageDefinition.options[0]
+    );
   }, [allowedOptions, selectedFormat]);
 
   useEffect(() => {
@@ -60,7 +65,9 @@ export default function HomePage() {
   }, [previewUrl, downloadUrl]);
 
   function resetDownload() {
-    if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    if (downloadUrl) {
+      URL.revokeObjectURL(downloadUrl);
+    }
     setDownloadUrl(null);
   }
 
@@ -92,16 +99,18 @@ export default function HomePage() {
       return;
     }
 
-    if (!imageDefinition.acceptedMimeTypes.includes(nextFile.type)) {
-      setErrorMessage("Unsupported image type. Please upload JPG or PNG.");
+    const normalizedMimeType = normalizeMimeType(nextFile.type);
+
+    if (!imageDefinition.acceptedMimeTypes.includes(normalizedMimeType)) {
+      setErrorMessage(getUnsupportedFormatMessage(nextFile.type));
       setFile(null);
       resetDownload();
       return;
     }
 
     setFile(nextFile);
-    resetDownload();
     setErrorMessage(null);
+    resetDownload();
   }
 
   const outputName = `image-converted.${selectedOption.outputExtension}`;
@@ -111,13 +120,17 @@ export default function HomePage() {
       <main className="mx-auto max-w-5xl space-y-8">
         <section className="rounded-2xl bg-white p-8 shadow-sm">
           <h1 className="text-3xl font-bold">Image Converter</h1>
-          <p className="mt-2 text-sm text-slate-600">Convert JPG and PNG images to PNG, JPG, or WebP directly in your browser.</p>
+          <p className="mt-2 text-sm text-slate-600">
+            Convert JPG and PNG images to PNG, JPG, or WebP directly in your browser.
+          </p>
         </section>
 
         <section className="grid gap-6 md:grid-cols-2">
           <div className="rounded-2xl bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold">1) Input</h2>
-            <p className="mt-1 text-sm text-slate-600">Upload a JPG or PNG image and pick an output format.</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Upload a JPG or PNG image and pick an output format.
+            </p>
 
             <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-5 py-12 text-center transition hover:border-slate-400">
               <span className="text-3xl">🖼️</span>
@@ -139,14 +152,23 @@ export default function HomePage() {
 
             {previewUrl && file && (
               <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Preview</p>
-                <img src={previewUrl} alt={file.name} className="max-h-56 w-full rounded-lg object-contain" />
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Preview
+                </p>
+                <img
+                  src={previewUrl}
+                  alt={file.name}
+                  className="max-h-56 w-full rounded-lg object-contain"
+                />
                 <p className="mt-2 truncate text-sm font-medium">{file.name}</p>
               </div>
             )}
 
             <div className="mt-4">
-              <label htmlFor="output-format" className="mb-2 block text-sm font-medium text-slate-700">
+              <label
+                htmlFor="output-format"
+                className="mb-2 block text-sm font-medium text-slate-700"
+              >
                 Output format
               </label>
               <select
@@ -165,9 +187,11 @@ export default function HomePage() {
                   </option>
                 ))}
               </select>
+
               {file && (
                 <p className="mt-2 text-xs text-slate-500">
-                  {formatLabelByMimeType[file.type] ?? "Input"} → {selectedOption.label}
+                  {formatLabelByMimeType[normalizeMimeType(file.type)] ?? "Input"} →{" "}
+                  {selectedOption.label}
                 </p>
               )}
             </div>
@@ -175,7 +199,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={handleConvert}
-              disabled={!file || isConverting}
+              disabled={!file || isConverting || allowedOptions.length === 0}
               className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
               {isConverting ? "Converting..." : "Convert image"}
@@ -186,7 +210,9 @@ export default function HomePage() {
 
           <div className="rounded-2xl bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold">2) Result</h2>
-            <p className="mt-1 text-sm text-slate-600">Your converted image will appear here.</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Your converted image will appear here.
+            </p>
 
             {downloadUrl ? (
               <div className="mt-6 space-y-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
@@ -205,7 +231,9 @@ export default function HomePage() {
               </div>
             )}
 
-            <p className="mt-6 text-xs text-slate-500">All processing is done locally in your browser. No uploads to a server.</p>
+            <p className="mt-6 text-xs text-slate-500">
+              All processing is done locally in your browser. No uploads to a server.
+            </p>
           </div>
         </section>
       </main>
