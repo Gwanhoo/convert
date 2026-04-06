@@ -1,59 +1,118 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { convertImageFile } from "@/lib/imageConverter";
-import { conversionDefinitions } from "@/lib/conversionTypes";
-import { getOutputOptionIdsForInputMime, getUnsupportedFormatMessage, normalizeMimeType } from "@/lib/imageFormatSupport";
 
-const imageDefinition = conversionDefinitions[0];
+type OutputFormat = "jpeg" | "webp" | "png";
+
+type OutputOption = {
+  id: OutputFormat;
+  label: string;
+  mimeType: string;
+  extension: string;
+};
+
+const outputOptions: OutputOption[] = [
+  { id: "jpeg", label: "JPG", mimeType: "image/jpeg", extension: "jpg" },
+  { id: "webp", label: "WebP", mimeType: "image/webp", extension: "webp" },
+  { id: "png", label: "PNG", mimeType: "image/png", extension: "png" }
+];
 
 const toolCards = [
   {
+    title: "Image Compressor",
+    description: "Reduce JPG and PNG image size directly in your browser.",
+    tags: [".JPG", ".PNG", ".WEBP"]
+  },
+  {
     title: "Image Converter",
     description: "Convert between WEBP, PNG, and JPG quickly in your browser.",
-    tags: [".WEBP", ".PNG", ".JPG"]
+    tags: ["IMAGE", "CONVERT"]
   },
   {
-    title: "MP4 to MP3",
-    description: "Future tool: extract audio tracks from video files.",
-    tags: ["COMING", "AUDIO"]
-  },
-  {
-    title: "PDF to Word",
-    description: "Future tool: OCR-ready document conversion pipeline.",
-    tags: ["COMING", "OCR"]
+    title: "PDF Compressor",
+    description: "Future tool: optimize PDF files without losing readability.",
+    tags: ["COMING", "PDF"]
   }
 ];
 
-export default function HomePage() {
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Could not load image."));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+function compressImage(file: File, option: OutputOption, quality: number): Promise<Blob> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const image = await loadImage(file);
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("Canvas is not supported in this browser."));
+        return;
+      }
+
+      if (option.mimeType === "image/jpeg") {
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      context.drawImage(image, 0, 0);
+
+      const outputQuality = option.mimeType === "image/png" ? undefined : quality;
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Compression failed."));
+            return;
+          }
+
+          resolve(blob);
+        },
+        option.mimeType,
+        outputQuality
+      );
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error("Compression failed."));
+    }
+  });
+}
+
+export default function ImageCompressorPage() {
   const [file, setFile] = useState<File | null>(null);
-  const [selectedFormat, setSelectedFormat] = useState(imageDefinition.options[0].id);
-  const [isConverting, setIsConverting] = useState(false);
+  const [quality, setQuality] = useState(0.8);
+  const [isCompressing, setIsCompressing] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [compressedSize, setCompressedSize] = useState<number | null>(null);
+  const [selectedOutputFormat, setSelectedOutputFormat] = useState<OutputFormat>("jpeg");
 
   const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
 
-  const allowedOutputIds = useMemo(() => {
-    if (!file) return imageDefinition.options.map((option) => option.id);
-    return getOutputOptionIdsForInputMime(file.type, imageDefinition.options);
-  }, [file]);
-
-  const allowedOptions = useMemo(
-    () => imageDefinition.options.filter((option) => allowedOutputIds.includes(option.id)),
-    [allowedOutputIds]
-  );
-
-  const selectedOption = useMemo(
-    () => allowedOptions.find((option) => option.id === selectedFormat) ?? allowedOptions[0] ?? imageDefinition.options[0],
-    [allowedOptions, selectedFormat]
-  );
-
-  useEffect(() => {
-    if (!allowedOptions.some((option) => option.id === selectedFormat) && allowedOptions[0]) {
-      setSelectedFormat(allowedOptions[0].id);
-    }
-  }, [allowedOptions, selectedFormat]);
+  const selectedOption = outputOptions.find((option) => option.id === selectedOutputFormat) ?? outputOptions[0];
 
   useEffect(() => {
     return () => {
@@ -62,54 +121,54 @@ export default function HomePage() {
     };
   }, [previewUrl, downloadUrl]);
 
-  function resetDownload() {
+  function clearResult() {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
-  }
-
-  async function handleConvert() {
-    if (!file) {
-      setErrorMessage("Please upload an image file first.");
-      return;
-    }
-
-    setErrorMessage(null);
-    setIsConverting(true);
-
-    try {
-      resetDownload();
-      const convertedBlob = await convertImageFile(file, selectedOption);
-      setDownloadUrl(URL.createObjectURL(convertedBlob));
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Conversion failed.");
-    } finally {
-      setIsConverting(false);
-    }
+    setCompressedSize(null);
   }
 
   function handleFileSelection(nextFile: File) {
     if (!nextFile.type.startsWith("image/")) {
       setErrorMessage("Invalid file. Please upload an image file.");
       setFile(null);
-      resetDownload();
+      clearResult();
       return;
     }
 
-    const normalizedMimeType = normalizeMimeType(nextFile.type);
-
-    if (!imageDefinition.acceptedMimeTypes.includes(normalizedMimeType)) {
-      setErrorMessage(getUnsupportedFormatMessage(nextFile.type));
+    if (!["image/jpeg", "image/png"].includes(nextFile.type)) {
+      setErrorMessage("Unsupported image type. Please upload JPG or PNG.");
       setFile(null);
-      resetDownload();
+      clearResult();
       return;
     }
 
     setFile(nextFile);
     setErrorMessage(null);
-    resetDownload();
+    clearResult();
   }
 
-  const outputName = `image-converted.${selectedOption.outputExtension}`;
+  async function handleCompress() {
+    if (!file) {
+      setErrorMessage("Please upload an image file first.");
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsCompressing(true);
+
+    try {
+      clearResult();
+      const compressedBlob = await compressImage(file, selectedOption, quality);
+      setDownloadUrl(URL.createObjectURL(compressedBlob));
+      setCompressedSize(compressedBlob.size);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Compression failed.");
+    } finally {
+      setIsCompressing(false);
+    }
+  }
+
+  const outputName = `image-compressed.${selectedOption.extension}`;
 
   return (
     <div className="min-h-screen text-[var(--text)]">
@@ -130,10 +189,10 @@ export default function HomePage() {
       <main className="mx-auto w-full max-w-7xl space-y-20 px-6 py-12">
         <section className="mx-auto max-w-4xl space-y-6 text-center">
           <h1 className="font-headline text-5xl font-extrabold leading-tight md:text-7xl">
-            Convert Your Files <span className="bg-gradient-to-r from-[var(--primary)] to-[var(--primary-container)] bg-clip-text text-transparent">Instantly</span>
+            Compress Your Images <span className="bg-gradient-to-r from-[var(--primary)] to-[var(--primary-container)] bg-clip-text text-transparent">Instantly</span>
           </h1>
           <p className="mx-auto max-w-2xl text-lg text-[var(--text-muted)]">
-            Fast, secure, and free file conversion directly in your browser. No software installation required.
+            Reduce image size in your browser with a simple quality setting. No file leaves your device.
           </p>
         </section>
 
@@ -143,7 +202,7 @@ export default function HomePage() {
               <h2 className="mb-4 text-lg font-bold text-[var(--primary)]">Input</h2>
 
               <div className="mb-6 flex flex-wrap items-center gap-3">
-                <span className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">Convert</span>
+                <span className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">Compress</span>
                 <div className="flex items-center gap-2 rounded-lg bg-[var(--surface-high)] px-3 py-2 text-sm font-semibold">
                   <span>{file ? file.name.split(".").pop()?.toUpperCase() : "JPG/PNG"}</span>
                   <span aria-hidden>→</span>
@@ -154,14 +213,14 @@ export default function HomePage() {
               <label className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--outline)]/40 bg-[var(--surface-low)]/60 px-6 py-16 text-center transition hover:border-[var(--primary)]/40 hover:bg-[var(--primary-container)]/10">
                 <div className="mb-3 text-5xl text-[var(--primary)]">⤴</div>
                 <h3 className="font-headline text-2xl font-bold">Drag & Drop File</h3>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">Only image files are allowed (PNG, JPG, WEBP, GIF, BMP, ICO)</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">Only JPG and PNG are supported.</p>
                 <span className="mt-6 rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dim)] px-8 py-3 text-xs font-bold uppercase tracking-[0.16em] text-white">
                   Upload File
                 </span>
                 <input
                   className="sr-only"
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png"
                   onChange={(event) => {
                     const nextFile = event.target.files?.[0];
                     if (nextFile) {
@@ -172,22 +231,28 @@ export default function HomePage() {
                 />
               </label>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+              {file && (
+                <div className="mt-4 rounded-xl border border-[var(--outline)]/30 bg-white px-4 py-3 text-sm">
+                  <p className="truncate font-semibold">{file.name}</p>
+                  <p className="text-xs text-[var(--text-muted)]">Original size: {formatBytes(file.size)}</p>
+                </div>
+              )}
+
+              <div className="mt-6 grid gap-4">
                 <div>
                   <label htmlFor="output-format" className="mb-2 block text-sm font-semibold text-[var(--text-muted)]">
                     Output format
                   </label>
                   <select
                     id="output-format"
-                    value={selectedOption.id}
+                    value={selectedOutputFormat}
                     onChange={(event) => {
-                      setSelectedFormat(event.target.value);
-                      resetDownload();
+                      setSelectedOutputFormat(event.target.value as OutputFormat);
+                      clearResult();
                     }}
-                    disabled={!file || allowedOptions.length === 0}
-                    className="w-full rounded-xl border border-[var(--outline)]/40 bg-white px-4 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:bg-slate-100"
+                    className="w-full rounded-xl border border-[var(--outline)]/40 bg-white px-4 py-3 text-sm font-medium"
                   >
-                    {allowedOptions.map((option) => (
+                    {outputOptions.map((option) => (
                       <option key={option.id} value={option.id}>
                         {option.label}
                       </option>
@@ -195,13 +260,38 @@ export default function HomePage() {
                   </select>
                 </div>
 
+                <div>
+                  <label htmlFor="quality" className="mb-2 block text-sm font-semibold text-[var(--text-muted)]">
+                    Quality: {Math.round(quality * 100)}%
+                  </label>
+                  <input
+                    id="quality"
+                    type="range"
+                    min="0.1"
+                    max="1"
+                    step="0.1"
+                    value={quality}
+                    onChange={(event) => {
+                      setQuality(Number(event.target.value));
+                      clearResult();
+                    }}
+                    className="w-full"
+                    disabled={selectedOption.mimeType === "image/png"}
+                  />
+                  {selectedOption.mimeType === "image/png" && (
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">PNG keeps quality (lossless conversion).</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6">
                 <button
                   type="button"
-                  onClick={handleConvert}
-                  disabled={!file || isConverting}
+                  onClick={handleCompress}
+                  disabled={!file || isCompressing}
                   className="min-w-[220px] rounded-full bg-[var(--primary)] px-8 py-4 text-sm font-bold uppercase tracking-[0.12em] text-white shadow-lg shadow-[var(--primary)]/25 transition hover:bg-[var(--primary-dim)] disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none"
                 >
-                  {isConverting ? "Converting..." : "Convert"}
+                  {isCompressing ? "Compressing..." : "Compress image"}
                 </button>
               </div>
 
@@ -218,29 +308,37 @@ export default function HomePage() {
                   <>
                     <img src={previewUrl} alt={file.name} className="mb-3 h-40 w-full rounded-lg object-cover" />
                     <p className="truncate text-sm font-bold">{file.name}</p>
-                    <p className="text-xs text-[var(--text-muted)]">Ready to convert</p>
+                    <p className="text-xs text-[var(--text-muted)]">Ready to compress</p>
                   </>
                 ) : (
-                  <p className="text-sm text-[var(--text-muted)]">No conversions yet. Upload an image to get started.</p>
+                  <p className="text-sm text-[var(--text-muted)]">No files yet. Upload an image to get started.</p>
                 )}
               </div>
 
               {downloadUrl ? (
-                <a
-                  href={downloadUrl}
-                  download={outputName}
-                  className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-[var(--primary-container)]/20 px-4 py-3 text-sm font-semibold text-[var(--primary)] transition hover:bg-[var(--primary-container)]/40"
-                >
-                  Download {outputName}
-                </a>
+                <>
+                  <p className="mt-4 text-sm font-medium text-emerald-700">Compression complete.</p>
+                  {file && compressedSize !== null && (
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                      {formatBytes(file.size)} → {formatBytes(compressedSize)}
+                    </p>
+                  )}
+                  <a
+                    href={downloadUrl}
+                    download={outputName}
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-[var(--primary-container)]/20 px-4 py-3 text-sm font-semibold text-[var(--primary)] transition hover:bg-[var(--primary-container)]/40"
+                  >
+                    Download {outputName}
+                  </a>
+                </>
               ) : (
                 <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-[var(--text-muted)]">
-                  {isConverting ? "Converting image..." : "Converted image will appear here."}
+                  {isCompressing ? "Compressing image..." : "Compressed image will appear here."}
                 </div>
               )}
 
               <p className="mt-4 rounded-lg border-l-4 border-[var(--primary)] bg-indigo-50 p-3 text-xs text-[var(--text)]">
-                Browser mode: your file stays on-device during conversion.
+                Browser mode: your file stays on-device during compression.
               </p>
             </div>
           </aside>
@@ -250,7 +348,7 @@ export default function HomePage() {
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--primary)]">Power Tools</p>
-              <h2 className="font-headline text-4xl font-extrabold">Popular Converters</h2>
+              <h2 className="font-headline text-4xl font-extrabold">Popular Tools</h2>
             </div>
             <button type="button" className="text-sm font-bold text-[var(--primary)]">View all tools →</button>
           </div>
