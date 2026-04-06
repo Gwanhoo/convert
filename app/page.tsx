@@ -137,10 +137,11 @@ export default function HomePage() {
           <p className="mt-2 text-sm text-slate-600">
             Convert JPG and PNG images to PNG, JPG, or WebP directly in your browser.
           </p>
-          <div className="flex items-center justify-center gap-3">
+
+          <div className="mt-4 flex items-center justify-center gap-3">
             <Link
               href="/image-compressor"
-              className="rounded-full bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--primary-dim)]"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
             >
               Go to Image Compressor
             </Link>
