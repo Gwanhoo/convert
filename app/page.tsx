@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { convertImageFile } from "@/lib/imageConverter";
 import { conversionDefinitions } from "@/lib/conversionTypes";
 import {
@@ -136,6 +137,14 @@ export default function HomePage() {
           <p className="mt-2 text-sm text-slate-600">
             Convert JPG and PNG images to PNG, JPG, or WebP directly in your browser.
           </p>
+          <div className="flex items-center justify-center gap-3">
+            <Link
+              href="/image-compressor"
+              className="rounded-full bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--primary-dim)]"
+            >
+              Go to Image Compressor
+            </Link>
+          </div>
         </section>
 
         <section className="grid gap-6 md:grid-cols-2">
