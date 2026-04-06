@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { convertImageFile } from "@/lib/imageConverter";
 import { conversionDefinitions } from "@/lib/conversionTypes";
+import { getOutputOptionIdsForInputMime, getUnsupportedFormatMessage, normalizeMimeType } from "@/lib/imageFormatSupport";
 
 const imageDefinition = conversionDefinitions[0];
 
@@ -31,12 +32,28 @@ export default function HomePage() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const selectedOption = useMemo(
-    () => imageDefinition.options.find((option) => option.id === selectedFormat) ?? imageDefinition.options[0],
-    [selectedFormat]
+  const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+
+  const allowedOutputIds = useMemo(() => {
+    if (!file) return imageDefinition.options.map((option) => option.id);
+    return getOutputOptionIdsForInputMime(file.type, imageDefinition.options);
+  }, [file]);
+
+  const allowedOptions = useMemo(
+    () => imageDefinition.options.filter((option) => allowedOutputIds.includes(option.id)),
+    [allowedOutputIds]
   );
 
-  const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  const selectedOption = useMemo(
+    () => allowedOptions.find((option) => option.id === selectedFormat) ?? allowedOptions[0] ?? imageDefinition.options[0],
+    [allowedOptions, selectedFormat]
+  );
+
+  useEffect(() => {
+    if (!allowedOptions.some((option) => option.id === selectedFormat) && allowedOptions[0]) {
+      setSelectedFormat(allowedOptions[0].id);
+    }
+  }, [allowedOptions, selectedFormat]);
 
   useEffect(() => {
     return () => {
@@ -45,14 +62,22 @@ export default function HomePage() {
     };
   }, [previewUrl, downloadUrl]);
 
+  function resetDownload() {
+    if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    setDownloadUrl(null);
+  }
+
   async function handleConvert() {
-    if (!file) return;
+    if (!file) {
+      setErrorMessage("Please upload an image file first.");
+      return;
+    }
 
     setErrorMessage(null);
     setIsConverting(true);
 
     try {
-      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+      resetDownload();
       const convertedBlob = await convertImageFile(file, selectedOption);
       setDownloadUrl(URL.createObjectURL(convertedBlob));
     } catch (error) {
@@ -62,23 +87,29 @@ export default function HomePage() {
     }
   }
 
-  const outputName = file
-    ? `${file.name.replace(/\.[^/.]+$/, "")}.${selectedOption.outputExtension}`
-    : `converted.${selectedOption.outputExtension}`;
-
-
   function handleFileSelection(nextFile: File) {
-    if (!imageDefinition.acceptedMimeTypes.includes(nextFile.type)) {
-      setErrorMessage("Unsupported file type. Please upload a JPG or PNG image.");
+    if (!nextFile.type.startsWith("image/")) {
+      setErrorMessage("Invalid file. Please upload an image file.");
       setFile(null);
-      setDownloadUrl(null);
+      resetDownload();
+      return;
+    }
+
+    const normalizedMimeType = normalizeMimeType(nextFile.type);
+
+    if (!imageDefinition.acceptedMimeTypes.includes(normalizedMimeType)) {
+      setErrorMessage(getUnsupportedFormatMessage(nextFile.type));
+      setFile(null);
+      resetDownload();
       return;
     }
 
     setFile(nextFile);
-    setDownloadUrl(null);
     setErrorMessage(null);
+    resetDownload();
   }
+
+  const outputName = `image-converted.${selectedOption.outputExtension}`;
 
   return (
     <div className="min-h-screen text-[var(--text)]">
@@ -109,6 +140,8 @@ export default function HomePage() {
         <section className="grid grid-cols-1 gap-10 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
             <div className="rounded-2xl bg-[var(--surface)] p-7 shadow-sm">
+              <h2 className="mb-4 text-lg font-bold text-[var(--primary)]">Input</h2>
+
               <div className="mb-6 flex flex-wrap items-center gap-3">
                 <span className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">Convert</span>
                 <div className="flex items-center gap-2 rounded-lg bg-[var(--surface-high)] px-3 py-2 text-sm font-semibold">
@@ -120,15 +153,15 @@ export default function HomePage() {
 
               <label className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--outline)]/40 bg-[var(--surface-low)]/60 px-6 py-16 text-center transition hover:border-[var(--primary)]/40 hover:bg-[var(--primary-container)]/10">
                 <div className="mb-3 text-5xl text-[var(--primary)]">⤴</div>
-                <h2 className="font-headline text-2xl font-bold">Drag & Drop File</h2>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">Supports JPG and PNG for now</p>
+                <h3 className="font-headline text-2xl font-bold">Drag & Drop File</h3>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">Only image files are allowed (PNG, JPG, WEBP, GIF, BMP, ICO)</p>
                 <span className="mt-6 rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dim)] px-8 py-3 text-xs font-bold uppercase tracking-[0.16em] text-white">
                   Upload File
                 </span>
                 <input
                   className="sr-only"
                   type="file"
-                  accept={imageDefinition.acceptedMimeTypes.join(",")}
+                  accept="image/*"
                   onChange={(event) => {
                     const nextFile = event.target.files?.[0];
                     if (nextFile) {
@@ -146,14 +179,15 @@ export default function HomePage() {
                   </label>
                   <select
                     id="output-format"
-                    value={selectedFormat}
+                    value={selectedOption.id}
                     onChange={(event) => {
                       setSelectedFormat(event.target.value);
-                      setDownloadUrl(null);
+                      resetDownload();
                     }}
-                    className="w-full rounded-xl border border-[var(--outline)]/40 bg-white px-4 py-3 text-sm font-medium"
+                    disabled={!file || allowedOptions.length === 0}
+                    className="w-full rounded-xl border border-[var(--outline)]/40 bg-white px-4 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:bg-slate-100"
                   >
-                    {imageDefinition.options.map((option) => (
+                    {allowedOptions.map((option) => (
                       <option key={option.id} value={option.id}>
                         {option.label}
                       </option>
@@ -177,7 +211,8 @@ export default function HomePage() {
 
           <aside className="space-y-6 lg:col-span-4">
             <div className="rounded-2xl bg-[var(--surface-low)] p-6">
-              <h3 className="font-headline text-xl font-bold">Recent Activity</h3>
+              <h2 className="font-headline text-xl font-bold">Result</h2>
+
               <div className="mt-4 rounded-xl bg-white p-4">
                 {previewUrl && file ? (
                   <>
@@ -190,14 +225,18 @@ export default function HomePage() {
                 )}
               </div>
 
-              {downloadUrl && (
+              {downloadUrl ? (
                 <a
                   href={downloadUrl}
                   download={outputName}
                   className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-[var(--primary-container)]/20 px-4 py-3 text-sm font-semibold text-[var(--primary)] transition hover:bg-[var(--primary-container)]/40"
                 >
-                  Download converted file
+                  Download {outputName}
                 </a>
+              ) : (
+                <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-[var(--text-muted)]">
+                  {isConverting ? "Converting image..." : "Converted image will appear here."}
+                </div>
               )}
 
               <p className="mt-4 rounded-lg border-l-4 border-[var(--primary)] bg-indigo-50 p-3 text-xs text-[var(--text)]">
