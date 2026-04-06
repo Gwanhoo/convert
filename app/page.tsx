@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { convertImageFile } from "@/lib/imageConverter";
 import { conversionDefinitions } from "@/lib/conversionTypes";
 
@@ -90,9 +91,9 @@ export default function HomePage() {
             <span className="text-sm text-[var(--text-muted)]">Tools</span>
             <span className="text-sm text-[var(--text-muted)]">About</span>
           </div>
-          <button className="rounded-full bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--primary-dim)]">
-            Get Started
-          </button>
+          <Link href="/image-compressor" className="rounded-full bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--primary-dim)]">
+            Image Compressor
+          </Link>
         </nav>
       </header>
 
