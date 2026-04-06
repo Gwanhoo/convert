@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { convertImageFile } from "@/lib/imageConverter";
 import { conversionDefinitions } from "@/lib/conversionTypes";
 
@@ -104,6 +105,14 @@ export default function HomePage() {
           <p className="mx-auto max-w-2xl text-lg text-[var(--text-muted)]">
             Fast, secure, and free file conversion directly in your browser. No software installation required.
           </p>
+          <div className="flex items-center justify-center gap-3">
+            <Link
+              href="/image-compressor"
+              className="rounded-full bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--primary-dim)]"
+            >
+              Go to Image Compressor
+            </Link>
+          </div>
         </section>
 
         <section className="grid grid-cols-1 gap-10 lg:grid-cols-12">
