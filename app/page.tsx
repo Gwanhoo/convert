@@ -7,6 +7,7 @@ import {
   getUnsupportedFormatMessage,
   normalizeMimeType
 } from "@/lib/imageFormatSupport";
+import { FormatSelector } from "@/components/FormatSelector";
 
 const imageDefinition = conversionDefinitions[0];
 
@@ -177,32 +178,20 @@ export default function HomePage() {
             )}
 
             <div className="mt-4">
-              <label
-                htmlFor="output-format"
-                className="mb-2 block text-sm font-medium text-slate-700"
-              >
-                Output format
-              </label>
-              <select
-                id="output-format"
-                value={selectedOption.id}
-                onChange={(event) => {
-                  setSelectedFormat(event.target.value);
+              <FormatSelector
+                options={allowedOptions}
+                selectedOptionId={selectedOption.id}
+                onChange={(optionId) => {
+                  setSelectedFormat(optionId);
                   resetDownload();
                 }}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                 disabled={!file || allowedOptions.length === 0}
-              >
-                {allowedOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
+              />
+            
               {file && (
                 <p className="mt-2 text-xs text-slate-500">
-                  {formatLabelByMimeType[normalizeMimeType(file.type)] ?? "Input"} → {selectedOption.label}
+                  {formatLabelByMimeType[normalizeMimeType(file.type)] ?? "Input"} →{" "}
+                  {selectedOption.label}
                 </p>
               )}
             </div>
